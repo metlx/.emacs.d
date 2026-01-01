@@ -1,217 +1,140 @@
-;; metlx's config
+;;; --- 1. THE STARTUP TURBO (Maximum Speed) ---
+(setq gc-cons-threshold most-positive-fixnum 
+      gc-cons-percentage 0.6
+      read-process-output-max (* 1024 1024)
+      frame-inhibit-implied-resize t)
 
-;; Defer garbage collection further back in the startup process
-(setq gc-cons-threshold most-positive-fixnum
-      gc-cons-percentage 0.6)
+;; Reset GC after 5 seconds of idle time to keep startup instant
+(add-hook 'emacs-startup-hook
+          (lambda () (run-with-idle-timer 5 nil (lambda () (setq gc-cons-threshold 800000)))))
 
-;; In Emacs 27+, package initialization occurs before `user-init-file' is
-;; loaded, but after `early-init-file'. Doom handles package initialization, so
-;; we must prevent Emacs from doing it early!
-(setq package-enable-at-startup nil)
+;;; --- 2. THE META DEBLOAT (Zero-UI / Total Darkness) ---
+(setq inhibit-startup-screen nil   ; KEEP the logo
+      initial-scratch-message ""   ; Clear background text
+      frame-title-format ""        ; Clear window title
+      mode-line-format nil         ; META: Kill the bottom status bar
+      use-file-dialog nil
+      inhibit-compacting-font-caches t)
 
-;; Do not allow loading from the package cache (same reason).
-(setq package-quickstart nil)
+;; Massive UI shutdown
+(mapc (lambda (mode) (when (fboundp mode) (funcall mode -1)))
+      '(menu-bar-mode tool-bar-mode scroll-bar-mode tooltip-mode))
 
-;; Prevent the glimpse of un-styled Emacs by disabling these UI elements early.
+;; Early frame settings to prevent "flashing" white bars
 (push '(menu-bar-lines . 0) default-frame-alist)
 (push '(tool-bar-lines . 0) default-frame-alist)
 (push '(vertical-scroll-bars) default-frame-alist)
 
-;; Resizing the Emacs frame can be a terribly expensive part of changing the
-;; font. By inhibiting this, we easily halve startup times with fonts that are
-;; larger than the system default.
-(setq frame-inhibit-implied-resize t)
+;;; --- 3. PACKAGE & NATIVE COMP ENGINE ---
+(setq comp-deferred-compilation nil
+      package-enable-at-startup nil
+      package-quickstart nil)
 
-;; Prevent unwanted runtime builds in gccemacs (native-comp); packages are
-;; compiled ahead-of-time when they are installed and site files are compiled
-;; when gccemacs is installed.
-(setq comp-deferred-compilation nil)
-
-;;; config
-(setq use-file-dialog nil)
-(setq make-backup-files nil)                         ;; relax
-(setq ring-bell-function 'ignore)                    ;; relax
-(setq auto-save-default nil)                         ;; no auto save
-(setq recentf-max-saved-items 50)                    ;; increase recentf files
-(setq scroll-step            1
-      scroll-conservatively  10000)                  ;; smooth scrollin
-(setq inhibit-startup-message t)
-(setq eglot-ignored-server-capabilities '(:hoverProvider))
-(add-to-list 'display-buffer-alist
-             '("\\*compilation\\*"
-               (display-buffer-reuse-window display-buffer-at-bottom)
-               (window-height . 15)))                ;; compilation buffer at the bottom w/ adjustable height
-;; (load-theme 'wheatgrass t)                           ;; set theme
-(recentf-mode 1)                                     ;; lets you C-x C-r for recent files
-(save-place-mode 1)
-(show-paren-mode 1)
-(prefer-coding-system 'utf-8)
-(menu-bar-mode -1)                                   ;; swag
-(tool-bar-mode -1)                                   ;; swag
-(scroll-bar-mode -1)                                 ;; swag
-(electric-pair-mode 1)                               ;; auto-closes parens ext...
-(ido-mode 1)                                         ;; populates buffers w/ options
-;; (set-face-attribute 'default nil :font "UbuntuMono Nerd Font" :height 160)
-
-;; ELPA and MELPA are the package repositories from which we can install
 (require 'package)
-(setq package-archives
-      '(("melpa" . "https://melpa.org/packages/")
-	("elpa" . "https://elpa.gnu.org/packages/")))
-
-;; Make sure `use-package' is available and install it if it isn't already.
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/"))
 (unless (package-installed-p 'use-package)
   (package-refresh-contents)
   (package-install 'use-package))
+(require 'use-package)
+(setq use-package-always-ensure t)
 
-;; python
-(use-package python
-  :config
-  ;; Remove guess indent python message
-  (setq python-indent-guess-indent-offset-verbose nil))
+;;; --- 4. CORE SETTINGS & LATENCY FIX ---
+(setq make-backup-files nil auto-save-default nil
+      ring-bell-function 'ignore
+      scroll-step 1 scroll-conservatively 10000
+      idle-update-delay 1.0
+      w32-get-true-pixel-density t)
 
-;; nice auto completion
+(setq-default cursor-type 'bar)
+(cua-mode t)          ; Standard Ctrl+C/V for your remapped Caps Lock
+(recentf-mode 1)
+(save-place-mode 1)
+(show-paren-mode 1)
+(electric-pair-mode 1)
+(fido-vertical-mode 1)
+(fset 'yes-or-no-p 'y-or-n-p)
+
+;; Load the best built-in dark theme
+(load-theme 'modus-vivendi t)
+;; OPTIONAL: If you want the background to be TRULY black (OLED style)
+;; instead of the default dark navy/grey of Modus Vivendi:
+(set-face-background 'default "#000000")
+(set-face-background 'mode-line "#1e1e1e") ; Subtle dark bar
+(set-face-foreground 'mode-line "#ffffff") ; White text on bar
+(set-face-attribute 'default nil :font "Cascadia Code" :height 120)
+
+;;; --- 5. LAZY-LOADED IDE FEATURES ---
+(use-package which-key :config (which-key-mode))
+
 (use-package company
-  :ensure t
-  :defer t
+  :hook (prog-mode . company-mode)
   :custom
-  ;; Search other buffers with the same modes for completion instead of
-  ;; searching all other buffers.
-  (company-dabbrev-other-buffers t)
-  (company-dabbrev-code-other-buffers t)
-  ;; M-<num> to select an option according to its number.
-  (company-show-numbers t)
-  ;; Only 2 letters required for completion to activate.
-  (company-minimum-prefix-length 2)
-  ;; Do not downcase completions by default.
-  (company-dabbrev-downcase nil)
-  ;; Even if I write something with the wrong case,
-  ;; provide the correct casing.
-  (company-dabbrev-ignore-case t)
-  ;; company completion wait
   (company-idle-delay 0.2)
-  ;; No company-mode in shell & eshell
-  (company-global-modes '(not eshell-mode shell-mode))
-  ;; Use company with text and programming modes.
-    :hook ((text-mode . company-mode)
-           (prog-mode . company-mode)))
+  (company-minimum-prefix-length 2))
 
-;;; <EGLOT> configuration, pick this or the LSP configuration but not both.
-;; Using Eglot with Pyright, a language server for Python.
-;; See: https://github.com/joaotavora/eglot.
-(use-package eglot
-  :ensure t
-  :defer t
-  :hook (python-mode . eglot-ensure))
-
-;; nice syntax highlighting
 (use-package tree-sitter
-  :ensure t
-  :config (global-tree-sitter-mode)
-  :init (add-hook 'python-mode-hook #'tree-sitter-hl-mode))
+  :hook (python-mode . tree-sitter-hl-mode)
+  :config (global-tree-sitter-mode))
 
-(use-package tree-sitter-langs
-  :ensure t)
+(use-package tree-sitter-langs :after tree-sitter)
 
-;; colors
-(use-package rainbow-delimiters
-  :ensure t
-  :config
-  (add-hook 'prog-mode-hook #'rainbow-delimiters-mode))
+(use-package eglot
+  :defer t
+  :hook (python-mode . eglot-ensure)
+  :custom (eglot-ignored-server-capabilities '(:hoverProvider)))
 
-;; cool highlighting
-(use-package highlight-numbers
-  :ensure t
-  :config
-  (add-hook 'prog-mode-hook 'highlight-numbers-mode))
+(use-package rainbow-delimiters :hook (prog-mode . rainbow-delimiters-mode))
 
-;; 👁️
-(use-package which-key
-  :ensure t
-  :config
-  (which-key-mode))
-
-;; swag
-(use-package doom-themes
-  :ensure t
-  :config
-  ;; Global settings (defaults)
-  (setq doom-themes-enable-bold t    ; if nil, bold is universally disabled
-        doom-themes-enable-italic t) ; if nil, italics is universally disabled
-  (load-theme 'doom-solarized-dark t))
-
-;; recentd
-(if (fboundp 'fido-mode)
-    (progn
-      (fido-mode 1)
-      (when (fboundp 'fido-vertical-mode)
-        (fido-vertical-mode 1))
-
-      (defun fido-recentf-open-directory ()
-        "Use `completing-read' to find a recent directory."
-        (interactive)
-        (let* ((recent-dirs (delete-dups (mapcar 'file-name-directory recentf-list)))
-               (chosen-dir (completing-read "Find recent directory: " recent-dirs)))
-          (when (file-directory-p chosen-dir)
-            (dired chosen-dir)
-            (message "Opening directory...")
-            (revert-buffer)))
-        (message "Aborting"))
-      (global-set-key (kbd "C-x C-d") 'fido-recentf-open-directory))
-  (progn
-    (ido-mode 1)
-    (ido-everywhere 1)
-
-    (setq ido-use-virtual-buffers t
-          ido-use-filename-at-point 'guess
-          ido-create-new-buffer 'always
-          ido-enable-flex-matching t)))
-
-;; recentf
-(if (fboundp 'fido-mode)
-    (progn
-      (fido-mode 1)
-      (when (fboundp 'fido-vertical-mode)
-        (fido-vertical-mode 1))
-
-      (defun fido-recentf-open ()
-        "Use `completing-read' to find a recent file."
-        (interactive)
-        (if (find-file (completing-read "Find recent file: " recentf-list))
-            (message "Opening file...")
-          (message "Aborting")))
-      (global-set-key (kbd "C-x C-r") 'fido-recentf-open))
-  (progn
-    (ido-mode 1)
-    (ido-everywhere 1)
-
-    (setq ido-use-virtual-buffers t
-          ido-use-filename-at-point 'guess
-          ido-create-new-buffer 'always
-          ido-enable-flex-matching t)))
-
-(defun my/kill-compilation-buffer-and-window ()
-  "Kill the compilation buffer, its window, and the Buffer List window."
+;;; --- 6. CUSTOM SMART FUNCTIONS ---
+(defun fido-recentf-open ()
+  "Fastest file switching."
   (interactive)
-  (let ((compilation-buffer (get-buffer "*compilation*"))
-        (buffer-list-buffer (get-buffer "*Buffer List*")))
-    (when compilation-buffer
-      (kill-buffer compilation-buffer)
-      (delete-window))
-    (when buffer-list-buffer
-      (kill-buffer buffer-list-buffer)
-      (delete-window)))
-  (keyboard-quit))
-(global-set-key (kbd "C-g") 'my/kill-compilation-buffer-and-window)
+  (find-file (completing-read "Find recent file: " recentf-list)))
+(global-set-key (kbd "C-x C-r") 'fido-recentf-open)
 
-(defun my-switch-to-buffer-list ()
-  "Show the buffer list and switch to the buffer list buffer."
-  (interactive)
-  (list-buffers)
-  (other-window 1))
-(global-set-key (kbd "C-x C-b") 'my-switch-to-buffer-list)
-
-(defun custom/kill-this-buffer ()
-  "buffer quickscopin"
+(defun custom/kill-this-buffer () 
+  "Quick-scope buffer."
   (interactive) (kill-buffer (current-buffer)))
 (global-set-key (kbd "C-x k") 'custom/kill-this-buffer)
+
+(defun meta/run-python ()
+  "Save the buffer and run the current python file."
+  (interactive)
+  (save-buffer)
+  (compile (format "python %s" (file-name-nondirectory buffer-file-name))))
+
+;; Bind it to F5 (a classic coder shortcut)
+(global-set-key (kbd "<f5>") 'meta/run-python)
+
+(defun meta/kill-extra-windows ()
+  "Kill the compilation buffer and reset to a single window layout."
+  (interactive)
+  (let ((comp-buf (get-buffer "*compilation*")))
+    (when comp-buf
+      (kill-buffer comp-buf)))
+  (delete-other-windows) ; This forces the 'Total Darkness' single-pane look
+  (message "Windows cleared."))
+
+;; Bind it to C-g
+(global-set-key (kbd "C-g") 'meta/kill-extra-windows)
+
+
+
+
+
+
+
+;; custom stuff
+(custom-set-variables
+ ;; custom-set-variables was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ '(inhibit-startup-screen t)
+ '(package-selected-packages nil))
+(custom-set-faces
+ ;; custom-set-faces was added by Custom.
+ ;; If you edit it by hand, you could mess it up, so be careful.
+ ;; Your init file should contain only one such instance.
+ ;; If there is more than one, they won't work right.
+ )
