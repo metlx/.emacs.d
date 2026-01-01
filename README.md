@@ -1,2 +1,1 @@
-# metlx emacs config
-pogchamp config brodie
+# pogchamp emacs config
