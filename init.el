@@ -1,98 +1,73 @@
-;;; --- 1. STARTUP OPTIMIZATION ---
-(setq gc-cons-threshold most-positive-fixnum
-      gc-cons-percentage 0.6)
+;;; init.el --- The "Formula 1" Config
 
-(add-hook 'emacs-startup-hook
-  (lambda () 
-    (setq gc-cons-threshold 800000 
-          gc-cons-percentage 0.1)))
+;; 1. GC Magic: Set it high for startup, reset it to something sane later
+(defun my/reset-gc ()
+  (setq gc-cons-threshold 800000 
+        gc-cons-percentage 0.1))
+(add-hook 'emacs-startup-hook #'my/reset-gc)
 
-;;; --- 2. THE DEBLOAT (Refined) ---
-(setq inhibit-startup-screen t
-      initial-scratch-message ""
-      use-file-dialog nil
-      use-dialog-box nil
-      inhibit-compacting-font-caches t)
-
-;;; --- 3. PACKAGE SETUP (Faster) ---
-(setq package-enable-at-startup nil)
+;; 2. Package Engine (Optimized for speed)
 (require 'package)
-(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
+(setq package-archives '(("melpa" . "https://melpa.org/packages/")
+                         ("gnu" . "https://elpa.gnu.org/packages/")))
+(package-initialize)
 
-;; Use-package configuration
-(eval-when-compile (require 'use-package))
+(eval-when-compile
+  (require 'use-package))
 (setq use-package-always-ensure t
-      use-package-always-defer t) ; This makes everything "Lazy" by default
+      use-package-always-defer t)
 
-;;; --- 4. CORE SETTINGS ---
+;; 3. Core Speed Settings (Lower Latency)
 (setq-default 
- make-backup-files nil 
- auto-save-default nil
+ inhibit-startup-screen t
+ initial-scratch-message ""
  ring-bell-function 'ignore
- scroll-conservatively 101)
+ scroll-conservatively 101
+ fast-but-imprecise-scrolling t  ; Don't wait for perfect render when scrolling fast
+ jit-lock-defer-time 0           ; Instant fontification
+ idle-update-delay 1.0)          ; Don't waste CPU when I'm active
 
-(cua-mode t)
-(recentf-mode 1)
-(save-place-mode 1)
-(show-paren-mode 1)
-(electric-pair-mode 1)
-(fido-vertical-mode 1)
-(defalias 'yes-or-no-p 'y-or-n-p)
-
-;;; --- 5. THEME & VISUALS ---
+;; 4. UI/Theme (Immediate Load)
 (use-package modus-themes
-  :ensure t
+  :demand t ; Loaded immediately because you can't work in the dark
   :init
-  ;; 1. Set Prot's specific overrides first
-  (setq modus-themes-italic-constructs t
-        modus-themes-bold-constructs nil
-        modus-themes-common-palette-overrides
-        '((bg-mode-line-active "#121212")      ; Subtle dark grey for active bar
-          (fg-mode-line-active "#ffffff")      ; Pure white text for active bar
-          (bg-mode-line-inactive "#000000")    ; Pure black for inactive bars
-          (border-mode-line-active unspecified))) ; Removes the "box" border
-
-  ;; 2. Load the theme
-  (load-theme 'modus-vivendi :no-confirm)
-
+  (setq modus-themes-common-palette-overrides
+        '((bg-mode-line-active "#121212")
+          (fg-mode-line-active "#ffffff")
+          (bg-mode-line-inactive "#000000")
+          (border-mode-line-active unspecified)))
   :config
-  ;; 3. Apply OLED black to the main window background
+  (load-theme 'modus-vivendi :no-confirm)
   (set-face-background 'default "#000000")
-  
-  ;; 4. Set your font
   (set-face-attribute 'default nil :font "Cascadia Code" :height 120))
 
-;;; --- 6. LAZY LOADED TOOLS ---
+;; 5. IDE Features (Fully Lazy)
 (use-package which-key :init (which-key-mode))
 
 (use-package company
   :hook (prog-mode . company-mode)
-  :custom
-  (company-idle-delay 0.0) ; Instant completion
-  (company-minimum-prefix-length 1))
-
-;; Built-in Python speed
-(use-package python
-  :interpreter ("python" . python-mode)
   :config
-  (setq python-shell-interpreter "python"))
+  (setq company-idle-delay 0.0
+        company-minimum-prefix-length 1
+        company-dabbrev-downcase nil)) ; Faster completion
 
 (use-package eglot
   :hook (python-mode . eglot-ensure)
   :config
-  (add-to-list 'eglot-ignored-server-capabilities :hoverProvider))
+  (add-to-list 'eglot-ignored-server-capabilities :hoverProvider)
+  (setq eglot-events-buffer-size 0)) ; Speed up by not logging LSP events
 
-;;; --- 7. SMART FUNCTIONS ---
+;; 6. Essential Modes
+(cua-mode t)
+(fido-vertical-mode 1)
+(recentf-mode 1)
+(save-place-mode 1)
+
+;; 7. The Global Keymap
 (global-set-key (kbd "C-x C-r") 
   (lambda () (interactive) (find-file (completing-read "Recent: " recentf-list))))
-
+(global-set-key (kbd "<f5>") 
+  (lambda () (interactive) (save-buffer) 
+    (compile (format "python %s" (file-name-nondirectory buffer-file-name)))))
 (global-set-key (kbd "C-x k") 'kill-current-buffer)
-
-(defun meta/run-python ()
-  (interactive)
-  (save-buffer)
-  (compile (format "python %s" (file-name-nondirectory buffer-file-name))))
-(global-set-key (kbd "<f5>") 'meta/run-python)
-
-;; Clear clutter with Escape
 (global-set-key (kbd "<escape>") 'keyboard-escape-quit)
