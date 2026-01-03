@@ -1,3 +1,5 @@
+;;; -*- lexical-binding: t; -*-
+
 ;;; init.el --- The "Formula 1" Config
 
 ;; 1. GC Magic: Set it high for startup, reset it to something sane later
@@ -54,8 +56,15 @@
 (use-package eglot
   :hook (python-mode . eglot-ensure)
   :config
+  ;; 1. Disable the hover provider if you find it distracting/slow
   (add-to-list 'eglot-ignored-server-capabilities :hoverProvider)
-  (setq eglot-events-buffer-size 0)) ; Speed up by not logging LSP events
+
+  ;; 2. THE FIX: New variable for Emacs 29/30+ to disable logging
+  (setq eglot-events-buffer-config '(:size 0 :format full))
+
+  ;; 3. SUPERCHARGE: Increase the amount of data Emacs reads from the LSP
+  ;; This prevents "stuttering" when the server sends a lot of completion data
+  (setq read-process-output-max (* 1024 1024)))
 
 ;; 6. Essential Modes
 (cua-mode t)
