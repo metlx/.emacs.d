@@ -1,82 +1,81 @@
-;;; -*- lexical-binding: t; -*-
+;; ricky bobby
+(setq gc-cons-threshold 100000000)
+(setq idle-update-delay 0.1)
 
-;;; init.el --- The "Formula 1" Config
-
-;; 1. GC Magic: Set it high for startup, reset it to something sane later
-(defun my/reset-gc ()
-  (setq gc-cons-threshold 800000 
-        gc-cons-percentage 0.1))
-(add-hook 'emacs-startup-hook #'my/reset-gc)
-
-;; 2. Package Engine (Optimized for speed)
+;; use package
 (require 'package)
-(setq package-archives '(("melpa" . "https://melpa.org/packages/")
-                         ("gnu" . "https://elpa.gnu.org/packages/")))
+(add-to-list 'package-archives '("melpa" . "https://melpa.org/packages/") t)
 (package-initialize)
+(unless (package-installed-p 'use-package)
+  (package-refresh-contents)
+  (package-install 'use-package))
+(require 'use-package)
+(setq use-package-always-ensure t)
 
-(eval-when-compile
-  (require 'use-package))
-(setq use-package-always-ensure t
-      use-package-always-defer t)
-
-;; 3. Core Speed Settings (Lower Latency)
-(setq-default 
- inhibit-startup-screen t
- initial-scratch-message ""
- ring-bell-function 'ignore
- scroll-conservatively 101
- fast-but-imprecise-scrolling t  ; Don't wait for perfect render when scrolling fast
- jit-lock-defer-time 0           ; Instant fontification
- idle-update-delay 1.0)          ; Don't waste CPU when I'm active
-
-;; 4. UI/Theme (Immediate Load)
-(use-package modus-themes
-  :demand t ; Loaded immediately because you can't work in the dark
+;; plugins
+(use-package vertico
   :init
-  (setq modus-themes-common-palette-overrides
-        '((bg-mode-line-active "#121212")
-          (fg-mode-line-active "#ffffff")
-          (bg-mode-line-inactive "#000000")
-          (border-mode-line-active unspecified)))
-  :config
-  (load-theme 'modus-vivendi :no-confirm)
-  (set-face-background 'default "#000000")
-  (set-face-attribute 'default nil :font "Cascadia Code" :height 120))
+  (vertico-mode))
 
-;; 5. IDE Features (Fully Lazy)
-(use-package which-key :init (which-key-mode))
+;; (use-package ef-themes
+;;   :config
+;;   (load-theme 'ef-dark t))
 
-(use-package company
-  :hook (prog-mode . company-mode)
+(use-package gruber-darker-theme
+  :ensure t
   :config
-  (setq company-idle-delay 0.0
-        company-minimum-prefix-length 1
-        company-dabbrev-downcase nil)) ; Faster completion
+  (load-theme 'gruber-darker t))
+
+(use-package corfu
+  :custom
+  (corfu-auto t)
+  (corfu-cycle t)
+  :init
+  (global-corfu-mode))
+
+(use-package treesit
+  :ensure nil
+  :config
+  (setq treesit-language-source-alist
+        '((python "https://github.com/tree-sitter/tree-sitter-python"))))
+
+(use-package python
+  :ensure nil
+  :mode ("\\.py\\'" . python-ts-mode)
+  :config
+  (setq python-indent-offset 4))
 
 (use-package eglot
-  :hook (python-mode . eglot-ensure)
+  :ensure nil
   :config
-  ;; 1. Disable the hover provider if you find it distracting/slow
-  (add-to-list 'eglot-ignored-server-capabilities :hoverProvider)
+  (add-hook 'eglot-managed-mode-hook (lambda () (eglot-inlay-hints-mode -1)))
+  :hook (python-ts-mode . eglot-ensure))
 
-  ;; 2. THE FIX: New variable for Emacs 29/30+ to disable logging
-  (setq eglot-events-buffer-config '(:size 0 :format full))
-
-  ;; 3. SUPERCHARGE: Increase the amount of data Emacs reads from the LSP
-  ;; This prevents "stuttering" when the server sends a lot of completion data
-  (setq read-process-output-max (* 1024 1024)))
-
-;; 6. Essential Modes
-(cua-mode t)
-(fido-vertical-mode 1)
-(recentf-mode 1)
+;; ui
+(setq ring-bell-function 'ignore)
+(tool-bar-mode -1)
+(menu-bar-mode -1)
+(electric-pair-mode 1)
+(scroll-bar-mode -1)
+(set-fringe-mode 10)
+(global-display-line-numbers-mode t)
+(setq display-line-numbers-type 'relative)
+(setq auto-save-default nil)
+(setq create-lockfiles nil)
+(setq make-backup-files nil)
+(setq scroll-step 1
+      scroll-conservatively 10000)
+(savehist-mode 1)
 (save-place-mode 1)
-
-;; 7. The Global Keymap
-(global-set-key (kbd "C-x C-r") 
-  (lambda () (interactive) (find-file (completing-read "Recent: " recentf-list))))
-(global-set-key (kbd "<f5>") 
-  (lambda () (interactive) (save-buffer) 
-    (compile (format "python %s" (file-name-nondirectory buffer-file-name)))))
-(global-set-key (kbd "C-x k") 'kill-current-buffer)
-(global-set-key (kbd "<escape>") 'keyboard-escape-quit)
+(set-charset-priority 'unicode)
+(setq treesit-font-lock-level 4)
+(setq-default cursor-type 'bar)
+(show-paren-mode 1)
+(setq show-paren-delay 0)
+(require 'recentf)
+(setq recentf-max-saved-items 30)
+(recentf-mode 1)
+(add-hook 'buffer-list-update-hook 'recentf-track-opened-file)
+(global-set-key (kbd "C-x C-r") 'recentf-open)
+(setq inhibit-startup-screen t)
+(setq initial-buffer-choice t)
